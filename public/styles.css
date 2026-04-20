@@ -127,6 +127,15 @@ input:focus { border-color: var(--accent); }
   text-transform: uppercase;
 }
 
+.create-group {
+  display: flex;
+  gap: 8px;
+}
+
+.create-group input {
+  flex: 1;
+}
+
 .divider {
   display: flex;
   align-items: center;

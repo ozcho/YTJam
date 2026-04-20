@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { nanoid } = require('nanoid');
 const path = require('path');
+const crypto = require('crypto');
 const YouTube = require('youtube-sr').default;
 const { execFile } = require('child_process');
 const fs = require('fs');
@@ -28,12 +29,14 @@ app.get('/api/config', (req, res) => {
 // In-memory store for jam sessions
 const jams = new Map();
 
-function createJam() {
+function createJam(password) {
   const id = nanoid(8);
   const adminToken = nanoid(16);
+  const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
   const jam = {
     id,
     adminToken,
+    passwordHash,
     queue: [],
     currentIndex: 0,
     isPlaying: false,
@@ -108,8 +111,23 @@ function downloadVideo(videoId, queueItem, jamId) {
 // --- REST API ---
 
 app.post('/api/jams', (req, res) => {
-  const jam = createJam();
+  const password = (req.body && req.body.password) || '';
+  if (!password || password.length < 1) {
+    return res.status(400).json({ error: 'Se requiere una contraseña' });
+  }
+  const jam = createJam(password);
   res.json({ id: jam.id, adminToken: jam.adminToken });
+});
+
+app.post('/api/jams/:id/auth', (req, res) => {
+  const jam = jams.get(req.params.id);
+  if (!jam) return res.status(404).json({ error: 'Jam no encontrada' });
+  const password = (req.body && req.body.password) || '';
+  const hash = crypto.createHash('sha256').update(password).digest('hex');
+  if (hash !== jam.passwordHash) {
+    return res.status(401).json({ error: 'Contraseña incorrecta' });
+  }
+  res.json({ adminToken: jam.adminToken });
 });
 
 app.get('/api/jams/:id', (req, res) => {

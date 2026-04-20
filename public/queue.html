@@ -20,6 +20,7 @@
     <h2>YT<span>Jam</span></h2>
     <div class="header-actions">
       <a class="btn-secondary" id="btn-open-player" href="#" target="_blank">📺 Reproductor</a>
+      <a class="btn-secondary" id="btn-open-admin" href="#">🔒 Admin</a>
       <span class="jam-code" id="jam-code"></span>
     </div>
   </header>
@@ -65,6 +66,7 @@
 
     document.getElementById('jam-code').textContent = jamId;
     document.getElementById('btn-open-player').href = '/jam/' + jamId + '/player';
+    document.getElementById('btn-open-admin').href = '/jam/' + jamId + '/admin';
 
     // Name modal
     const nameModal = document.getElementById('name-modal');

@@ -67,14 +67,53 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const jamId = window.location.pathname.split('/')[2];
-    const adminToken = localStorage.getItem(`ytjam_admin_${jamId}`);
+    let adminToken = localStorage.getItem(`ytjam_admin_${jamId}`);
     const socket = io();
     let currentState = null;
     let isPlaying = false;
 
     if (!adminToken) {
-      document.body.innerHTML = '<div class="home-container"><h1>⛔</h1><p class="subtitle">No tienes permisos de administrador para esta Jam.</p><a href="/">Volver al inicio</a></div>';
+      showPasswordPrompt();
+    } else {
+      initAdmin();
     }
+
+    function showPasswordPrompt() {
+      document.body.innerHTML = `
+        <div class="home-container">
+          <h1>🔒 YT<span style="color:var(--accent)">Jam</span> Admin</h1>
+          <p class="subtitle">Introduce la contraseña de administrador</p>
+          <div class="create-group">
+            <input type="password" id="admin-pass" placeholder="Contraseña" maxlength="50" autofocus>
+            <button class="btn-primary" id="btn-auth">Entrar</button>
+          </div>
+          <p id="auth-error" style="color:#e74c3c;margin-top:8px;display:none"></p>
+          <a href="/jam/${jamId}" style="color:var(--text-muted);margin-top:12px;display:inline-block">Volver a la cola</a>
+        </div>`;
+      document.getElementById('btn-auth').addEventListener('click', doAuth);
+      document.getElementById('admin-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doAuth(); });
+    }
+
+    async function doAuth() {
+      const pass = document.getElementById('admin-pass').value;
+      if (!pass) return;
+      const res = await fetch('/api/jams/' + jamId + '/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pass })
+      });
+      if (!res.ok) {
+        document.getElementById('auth-error').textContent = 'Contraseña incorrecta';
+        document.getElementById('auth-error').style.display = 'block';
+        return;
+      }
+      const data = await res.json();
+      adminToken = data.adminToken;
+      localStorage.setItem(`ytjam_admin_${jamId}`, adminToken);
+      window.location.reload();
+    }
+
+    function initAdmin() {
 
     document.getElementById('jam-code').textContent = jamId;
     document.getElementById('btn-open-player').href = '/jam/' + jamId + '/player';
@@ -304,6 +343,8 @@
       toast.classList.add('show');
       setTimeout(() => toast.classList.remove('show'), 2500);
     }
+
+    } // end initAdmin
   </script>
 </body>
 </html>

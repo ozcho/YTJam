@@ -12,7 +12,10 @@
     <p class="subtitle">Escucha YouTube juntos en tiempo real</p>
 
     <div class="home-actions">
-      <button class="btn-primary" id="btn-create">Crear una Jam</button>
+      <div class="create-group">
+        <input type="password" id="create-password" placeholder="Contraseña de admin" maxlength="50">
+        <button class="btn-primary" id="btn-create">Crear una Jam</button>
+      </div>
 
       <div class="divider">o unirse a una existente</div>
 
@@ -25,9 +28,14 @@
 
   <script>
     document.getElementById('btn-create').addEventListener('click', async () => {
-      const res = await fetch('/api/jams', { method: 'POST' });
+      const password = document.getElementById('create-password').value;
+      if (!password) { alert('Introduce una contraseña para el admin'); return; }
+      const res = await fetch('/api/jams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
       const data = await res.json();
-      // Store admin token and redirect to admin view
       localStorage.setItem(`ytjam_admin_${data.id}`, data.adminToken);
       window.location.href = `/jam/${data.id}/admin`;
     });
