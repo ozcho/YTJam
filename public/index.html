@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YTJam - YouTube colaborativo</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="home-container">
+    <h1>🎵 YT<span>Jam</span></h1>
+    <p class="subtitle">Escucha YouTube juntos en tiempo real</p>
+
+    <div class="home-actions">
+      <button class="btn-primary" id="btn-create">Crear una Jam</button>
+
+      <div class="divider">o unirse a una existente</div>
+
+      <div class="join-group">
+        <input type="text" id="join-code" placeholder="Código" maxlength="8">
+        <button class="btn-primary" id="btn-join">Unirse</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('btn-create').addEventListener('click', async () => {
+      const res = await fetch('/api/jams', { method: 'POST' });
+      const data = await res.json();
+      // Store admin token and redirect to admin view
+      localStorage.setItem(`ytjam_admin_${data.id}`, data.adminToken);
+      window.location.href = `/jam/${data.id}/admin`;
+    });
+
+    document.getElementById('btn-join').addEventListener('click', () => {
+      const code = document.getElementById('join-code').value.trim();
+      if (code) {
+        window.location.href = `/jam/${code}`;
+      }
+    });
+
+    document.getElementById('join-code').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('btn-join').click();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YTJam - Cola</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <!-- Name modal -->
+  <div class="modal-overlay" id="name-modal">
+    <div class="modal">
+      <h3>¿Cómo te llamas?</h3>
+      <input type="text" id="name-input" placeholder="Tu nombre" maxlength="30" autofocus>
+      <button class="btn-primary" id="name-submit">Entrar</button>
+    </div>
+  </div>
+
+  <header class="app-header">
+    <h2>YT<span>Jam</span></h2>
+    <span class="jam-code" id="jam-code"></span>
+  </header>
+
+  <div class="page-content">
+    <div class="section-title">Agregar video</div>
+    <div class="tabs">
+      <button class="tab active" data-tab="search" onclick="switchTab('search')">🔍 Buscar</button>
+      <button class="tab" data-tab="url" onclick="switchTab('url')">🔗 Pegar URL</button>
+    </div>
+
+    <div id="tab-search" style="margin-top:12px">
+      <div class="url-input-group">
+        <input type="text" id="search-input" placeholder="Buscar videos en YouTube...">
+        <button class="btn-primary" id="btn-search">Buscar</button>
+      </div>
+      <ul class="search-results" id="search-results"></ul>
+    </div>
+
+    <div id="tab-url" style="margin-top:12px;display:none">
+      <div class="url-input-group">
+        <input type="text" id="url-input" placeholder="Pega un link de YouTube...">
+        <button class="btn-primary" id="btn-add-url">Agregar</button>
+      </div>
+    </div>
+
+    <div class="section-title">Cola de reproducción</div>
+    <ul class="queue-list" id="queue-list">
+      <li class="empty-state">
+        <div class="icon">🎶</div>
+        <p>La cola está vacía. ¡Agrega un video!</p>
+      </li>
+    </ul>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const jamId = window.location.pathname.split('/')[2];
+    const socket = io();
+    let userName = localStorage.getItem('ytjam_name') || '';
+
+    document.getElementById('jam-code').textContent = jamId;
+
+    // Name modal
+    const nameModal = document.getElementById('name-modal');
+    if (userName) {
+      nameModal.style.display = 'none';
+      connectSocket();
+    }
+
+    document.getElementById('name-submit').addEventListener('click', () => {
+      const name = document.getElementById('name-input').value.trim();
+      if (name) {
+        userName = name;
+        localStorage.setItem('ytjam_name', name);
+        nameModal.style.display = 'none';
+        connectSocket();
+      }
+    });
+
+    document.getElementById('name-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('name-submit').click();
+    });
+
+    function connectSocket() {
+      socket.emit('join-jam', { jamId, role: 'viewer' });
+    }
+
+    // Tab switching
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+      document.getElementById('tab-search').style.display = tab === 'search' ? '' : 'none';
+      document.getElementById('tab-url').style.display = tab === 'url' ? '' : 'none';
+    }
+    window.switchTab = switchTab;
+
+    // Search
+    let searchTimeout = null;
+    document.getElementById('btn-search').addEventListener('click', doSearch);
+    document.getElementById('search-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') doSearch();
+    });
+    document.getElementById('search-input').addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(doSearch, 500);
+    });
+
+    async function doSearch() {
+      const q = document.getElementById('search-input').value.trim();
+      if (!q) return;
+      const container = document.getElementById('search-results');
+      container.innerHTML = '<li class="empty-state"><p>Buscando...</p></li>';
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+        const results = await res.json();
+        if (results.length === 0) {
+          container.innerHTML = '<li class="empty-state"><p>Sin resultados</p></li>';
+          return;
+        }
+        container.innerHTML = results.map(v => `
+          <li class="search-result-item" onclick="addFromSearch('${v.videoId}', this)">
+            <img src="${escapeAttr(v.thumbnail)}" alt="">
+            <div class="queue-item-info">
+              <div class="title">${escapeHtml(v.title)}</div>
+              <div class="added-by">${escapeHtml(v.channel)} · ${escapeHtml(v.duration)}</div>
+            </div>
+            <button class="btn-icon" title="Agregar" style="font-size:20px;flex-shrink:0">+</button>
+          </li>
+        `).join('');
+      } catch(e) {
+        container.innerHTML = '<li class="empty-state"><p>Error al buscar</p></li>';
+      }
+    }
+
+    function addFromSearch(videoId, el) {
+      if (el) {
+        const title = el.querySelector('.title').textContent;
+        const thumbnail = el.querySelector('img').src;
+        socket.emit('add-video', { videoId, title, thumbnail, addedBy: userName });
+        showToast('¡Video agregado!');
+        return;
+      }
+      addVideoById(videoId);
+    }
+    window.addFromSearch = addFromSearch;
+
+    // Add by URL
+    document.getElementById('btn-add-url').addEventListener('click', () => {
+      const url = document.getElementById('url-input').value.trim();
+      const videoId = extractVideoId(url);
+      if (!videoId) {
+        showToast('URL no válida');
+        return;
+      }
+      addVideoById(videoId);
+      document.getElementById('url-input').value = '';
+    });
+
+    document.getElementById('url-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('btn-add-url').click();
+    });
+
+    function extractVideoId(url) {
+      try {
+        // Handle various YouTube URL formats
+        const patterns = [
+          /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})/,
+          /^([a-zA-Z0-9_-]{11})$/,
+        ];
+        for (const p of patterns) {
+          const m = url.match(p);
+          if (m) return m[1];
+        }
+      } catch(e) {}
+      return null;
+    }
+
+    function addVideoById(videoId) {
+      // Use YouTube oEmbed to get title
+      fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`)
+        .then(r => r.json())
+        .then(data => {
+          socket.emit('add-video', {
+            videoId,
+            title: data.title || 'Video sin título',
+            thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+            addedBy: userName,
+          });
+          showToast('¡Video agregado!');
+        })
+        .catch(() => {
+          // If oEmbed fails, still add with generic title
+          socket.emit('add-video', {
+            videoId,
+            title: 'Video de YouTube',
+            thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+            addedBy: userName,
+          });
+          showToast('Video agregado');
+        });
+    }
+
+    // Queue rendering
+    socket.on('jam-state', (state) => {
+      renderQueue(state);
+    });
+
+    socket.on('error-msg', (msg) => {
+      showToast(msg);
+    });
+
+    function renderQueue(state) {
+      const list = document.getElementById('queue-list');
+
+      if (state.queue.length === 0) {
+        list.innerHTML = `
+          <li class="empty-state">
+            <div class="icon">🎶</div>
+            <p>La cola está vacía. ¡Agrega un video!</p>
+          </li>`;
+        return;
+      }
+
+      list.innerHTML = state.queue.map((item, i) => `
+        <li class="queue-item ${i === state.currentIndex ? 'playing' : ''}">
+          <span class="queue-item-index">${i === state.currentIndex ? '▶' : i + 1}</span>
+          <img src="${escapeAttr(item.thumbnail)}" alt="">
+          <div class="queue-item-info">
+            <div class="title">${escapeHtml(item.title)}</div>
+            <div class="added-by">${escapeHtml(item.addedBy)} · ${statusBadge(item.status)}</div>
+          </div>
+        </li>
+      `).join('');
+    }
+
+    function statusBadge(status) {
+      if (status === 'ready') return '<span style="color:var(--green)">✓ Listo</span>';
+      if (status === 'downloading') return '<span style="color:#f39c12">⏳ Descargando...</span>';
+      if (status === 'error') return '<span style="color:var(--accent)">✕ Error</span>';
+      return '';
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function escapeAttr(str) {
+      return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+  </script>
+</body>
+</html>
