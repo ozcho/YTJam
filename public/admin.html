@@ -9,7 +9,10 @@
 <body>
   <header class="app-header">
     <h2>YT<span>Jam</span> · Admin</h2>
-    <span class="jam-code" id="jam-code"></span>
+    <div class="header-actions">
+      <a class="btn-secondary" id="btn-open-player" href="#" target="_blank">📺 Reproductor</a>
+      <span class="jam-code" id="jam-code"></span>
+    </div>
   </header>
 
   <div class="share-bar" id="share-bar">
@@ -74,6 +77,7 @@
     }
 
     document.getElementById('jam-code').textContent = jamId;
+    document.getElementById('btn-open-player').href = '/jam/' + jamId + '/player';
 
     let baseUrl = window.location.origin;
     fetch('/api/config').then(r => r.json()).then(cfg => {

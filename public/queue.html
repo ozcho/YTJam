@@ -18,7 +18,10 @@
 
   <header class="app-header">
     <h2>YT<span>Jam</span></h2>
-    <span class="jam-code" id="jam-code"></span>
+    <div class="header-actions">
+      <a class="btn-secondary" id="btn-open-player" href="#" target="_blank">📺 Reproductor</a>
+      <span class="jam-code" id="jam-code"></span>
+    </div>
   </header>
 
   <div class="page-content">
@@ -61,6 +64,7 @@
     let userName = localStorage.getItem('ytjam_name') || '';
 
     document.getElementById('jam-code').textContent = jamId;
+    document.getElementById('btn-open-player').href = '/jam/' + jamId + '/player';
 
     // Name modal
     const nameModal = document.getElementById('name-modal');

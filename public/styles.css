@@ -157,6 +157,17 @@ input:focus { border-color: var(--accent); }
 
 .app-header h2 span { color: var(--accent); }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-actions .btn-secondary {
+  text-decoration: none;
+  font-size: 13px;
+}
+
 .jam-code {
   font-family: monospace;
   background: var(--surface-2);
