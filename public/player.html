@@ -100,7 +100,8 @@
     socket.on('player-command', (cmd) => {
       switch (cmd.action) {
         case 'play':
-          videoEl.play();
+          videoEl.muted = true;
+          videoEl.play().then(function() { videoEl.muted = false; }).catch(function(){});
           break;
         case 'pause':
           videoEl.pause();
@@ -129,10 +130,13 @@
 
       if (current.status === 'ready' && current.mediaUrl) {
         if (videoEl.getAttribute('data-video-id') !== current.videoId) {
-          videoEl.src = current.mediaUrl;
           videoEl.setAttribute('data-video-id', current.videoId);
+          videoEl.muted = true;
+          videoEl.src = current.mediaUrl;
           videoEl.load();
-          videoEl.play().catch(function(){});
+          videoEl.play().then(function() {
+            videoEl.muted = false;
+          }).catch(function(){});
         }
         videoEl.style.display = 'block';
         waitingScreen.style.display = 'none';

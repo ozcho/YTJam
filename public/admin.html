@@ -143,11 +143,7 @@
     document.getElementById('btn-share').addEventListener('click', () => {
       const url = `${baseUrl}/jam/${jamId}`;
       if (navigator.share) {
-        navigator.share({
-          title: 'YTJam · ' + jamId,
-          text: '¡Únete a mi jam y agrega canciones!',
-          url,
-        }).catch(() => {});
+        navigator.share({ url }).catch(() => {});
       } else {
         navigator.clipboard.writeText(url);
         showToast('Enlace copiado');
