@@ -340,12 +340,6 @@ input:focus { border-color: var(--accent); }
   z-index: 9999;
 }
 
-body.fullscreen-active {
-  overflow: hidden;
-  position: fixed;
-  width: 100%;
-}
-
 .player-wrapper {
   flex: 1;
   min-height: 0;
