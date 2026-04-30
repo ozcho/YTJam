@@ -21,6 +21,11 @@
     <button class="btn-secondary" id="btn-copy-queue">Copiar Cola</button>
     <button class="btn-secondary" id="btn-copy-player">Copiar Reproductor</button>
     <button class="btn-secondary" id="btn-share">📤 Compartir</button>
+    <label class="qr-toggle" title="Mostrar/ocultar QR en el reproductor">
+      <span>QR</span>
+      <input type="checkbox" id="chk-qr" checked>
+      <span class="qr-toggle-slider"></span>
+    </label>
   </div>
 
   <!-- Player controls -->
@@ -147,6 +152,10 @@
         navigator.clipboard.writeText(url);
         showToast('Enlace copiado');
       }
+    });
+
+    document.getElementById('chk-qr').addEventListener('change', (e) => {
+      socket.emit('toggle-qr', { show: e.target.checked });
     });
 
     // Connect
@@ -276,6 +285,7 @@
       currentState = state;
       isPlaying = state.isPlaying;
       document.getElementById('btn-play').textContent = isPlaying ? '⏸' : '▶';
+      document.getElementById('chk-qr').checked = state.showQr !== false;
       renderQueue(state);
     });
 

@@ -40,6 +40,7 @@ function createJam(password) {
     queue: [],
     currentIndex: 0,
     isPlaying: false,
+    showQr: true,
     createdAt: Date.now(),
   };
   jams.set(id, jam);
@@ -60,6 +61,7 @@ function getPublicJamState(jam) {
     })),
     currentIndex: jam.currentIndex,
     isPlaying: jam.isPlaying,
+    showQr: jam.showQr !== false,
   };
 }
 
@@ -245,6 +247,14 @@ io.on('connection', (socket) => {
     if (!jam) return;
     jam.isPlaying = false;
     io.to(currentJamId).emit('player-command', { action: 'pause' });
+    io.to(currentJamId).emit('jam-state', getPublicJamState(jam));
+  });
+
+  socket.on('toggle-qr', ({ show }) => {
+    if (!isAdmin()) return;
+    const jam = jams.get(currentJamId);
+    if (!jam) return;
+    jam.showQr = !!show;
     io.to(currentJamId).emit('jam-state', getPublicJamState(jam));
   });
 

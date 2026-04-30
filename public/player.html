@@ -89,6 +89,8 @@
       currentState = state;
       updateNowPlaying(state);
       tryLoadCurrent(state);
+      const qrEl = document.getElementById('qr-code');
+      qrEl.style.display = state.showQr !== false ? '' : 'none';
     });
 
     socket.on('player-command', (cmd) => {
