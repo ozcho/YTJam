@@ -140,6 +140,7 @@ app.get('/api/jams/:id', (req, res) => {
 });
 
 app.get('/api/search', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   const q = String(req.query.q || '').trim();
   if (!q) return res.json([]);
   try {
