@@ -192,18 +192,24 @@
     // Fullscreen
     function toggleFullscreen() {
       const page = document.querySelector('.player-page');
-      // iOS Safari only supports fullscreen on the video element itself
-      if (videoEl.webkitEnterFullscreen && !document.fullscreenElement && !document.webkitFullscreenElement) {
-        videoEl.webkitEnterFullscreen();
-        return;
-      }
-      const reqFS = page.requestFullscreen || page.webkitRequestFullscreen;
-      const exitFS = document.exitFullscreen || document.webkitExitFullscreen;
-      const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-      if (!fsEl) {
-        reqFS.call(page).catch(function(){});
+      const isFs = document.fullscreenElement || document.webkitFullscreenElement || page.classList.contains('fake-fullscreen');
+
+      if (isFs) {
+        // Exit
+        page.classList.remove('fake-fullscreen');
+        if (document.exitFullscreen) document.exitFullscreen().catch(function(){});
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
       } else {
-        exitFS.call(document);
+        // Try native fullscreen first (Android/desktop)
+        const reqFS = page.requestFullscreen || page.webkitRequestFullscreen;
+        if (reqFS) {
+          reqFS.call(page).catch(function() {
+            // Native failed (iOS) — use CSS fake fullscreen
+            page.classList.add('fake-fullscreen');
+          });
+        } else {
+          page.classList.add('fake-fullscreen');
+        }
       }
     }
     window.toggleFullscreen = toggleFullscreen;
