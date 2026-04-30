@@ -20,6 +20,7 @@
     <code id="share-link"></code>
     <button class="btn-secondary" id="btn-copy-queue">Copiar Cola</button>
     <button class="btn-secondary" id="btn-copy-player">Copiar Reproductor</button>
+    <button class="btn-secondary" id="btn-share">📤 Compartir</button>
   </div>
 
   <!-- Player controls -->
@@ -132,6 +133,20 @@
     document.getElementById('btn-copy-player').addEventListener('click', () => {
       navigator.clipboard.writeText(`${baseUrl}/jam/${jamId}/player`);
       showToast('Enlace de reproductor copiado');
+    });
+
+    document.getElementById('btn-share').addEventListener('click', () => {
+      const url = `${baseUrl}/jam/${jamId}`;
+      if (navigator.share) {
+        navigator.share({
+          title: 'YTJam · ' + jamId,
+          text: '¡Únete a mi jam y agrega canciones!',
+          url,
+        }).catch(() => {});
+      } else {
+        navigator.clipboard.writeText(url);
+        showToast('Enlace copiado');
+      }
     });
 
     // Connect
