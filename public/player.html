@@ -94,7 +94,10 @@
       updateNowPlaying(state);
       tryLoadCurrent(state);
       const qrEl = document.getElementById('qr-code');
-      qrEl.style.display = state.showQr !== false ? '' : 'none';
+      const jamCodeEl = document.getElementById('jam-code');
+      const show = state.showQr !== false;
+      qrEl.style.display = show ? '' : 'none';
+      jamCodeEl.style.display = show ? '' : 'none';
     });
 
     socket.on('player-command', (cmd) => {
