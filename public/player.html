@@ -9,7 +9,7 @@
 <body>
   <div class="player-page">
     <div class="player-wrapper">
-      <video id="video-player" autoplay style="width:100%;height:100%;background:#000;object-fit:contain"></video>
+      <video id="video-player" autoplay muted playsinline style="width:100%;height:100%;background:#000;object-fit:contain"></video>
       <div id="start-screen" onclick="startPlayer()" style="position:absolute;top:0;left:0;right:0;bottom:0;background:#0f0f0f;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;cursor:pointer;z-index:10">
         <div style="font-size:72px;margin-bottom:20px">🎵</div>
         <div style="font-size:24px;font-weight:600;margin-bottom:8px">YTJam</div>
@@ -49,9 +49,13 @@
     function startPlayer() {
       started = true;
       startScreen.style.display = 'none';
-      // Play a silent snippet to unlock audio context
-      videoEl.muted = false;
-      videoEl.play().catch(function(){});
+      // Unlock audio on iOS: play muted first, then unmute
+      videoEl.muted = true;
+      videoEl.play().then(function() {
+        videoEl.muted = false;
+      }).catch(function() {
+        videoEl.muted = false;
+      });
       // Now connect and load
       socket.emit('join-jam', { jamId: jamId, role: 'player' });
     }
@@ -127,7 +131,8 @@
         if (videoEl.getAttribute('data-video-id') !== current.videoId) {
           videoEl.src = current.mediaUrl;
           videoEl.setAttribute('data-video-id', current.videoId);
-          videoEl.play();
+          videoEl.load();
+          videoEl.play().catch(function(){});
         }
         videoEl.style.display = 'block';
         waitingScreen.style.display = 'none';

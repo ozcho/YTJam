@@ -82,8 +82,9 @@ function downloadVideo(videoId, queueItem, jamId) {
   queueItem.status = 'downloading';
 
   const args = [
-    '-f', 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best',
+    '-f', 'bestvideo[vcodec^=avc][height<=720]+bestaudio[acodec^=mp4a]/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best',
     '--merge-output-format', 'mp4',
+    '--postprocessor-args', 'ffmpeg:-vcodec libx264 -acodec aac',
     '-o', outputPath,
     '--no-playlist',
     '--no-warnings',
