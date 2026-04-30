@@ -129,7 +129,7 @@
             <img src="${escapeAttr(v.thumbnail)}" alt="">
             <div class="queue-item-info">
               <div class="title">${escapeHtml(v.title)}</div>
-              <div class="added-by">${escapeHtml(v.channel)} · ${escapeHtml(v.duration)}</div>
+              <div class="added-by">${escapeHtml(v.channel)} · ${escapeHtml(v.duration)}${v.cached ? ' · <span class="cached-badge">✓ descargado</span>' : ''}</div>
             </div>
             <button class="btn-icon" title="Agregar" style="font-size:20px;flex-shrink:0">+</button>
           </li>

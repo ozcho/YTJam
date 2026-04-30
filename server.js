@@ -150,6 +150,7 @@ app.get('/api/search', async (req, res) => {
       thumbnail: v.thumbnail?.url || ('https://img.youtube.com/vi/' + v.id + '/mqdefault.jpg'),
       duration: v.durationFormatted || '',
       channel: v.channel?.name || '',
+      cached: fs.existsSync(path.join(mediaDir, `${v.id}.mp4`)),
     })));
   } catch (err) {
     console.error('Search error:', err.message);
