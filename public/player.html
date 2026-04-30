@@ -192,10 +192,18 @@
     // Fullscreen
     function toggleFullscreen() {
       const page = document.querySelector('.player-page');
-      if (!document.fullscreenElement) {
-        page.requestFullscreen().catch(function(){});
+      // iOS Safari only supports fullscreen on the video element itself
+      if (videoEl.webkitEnterFullscreen && !document.fullscreenElement && !document.webkitFullscreenElement) {
+        videoEl.webkitEnterFullscreen();
+        return;
+      }
+      const reqFS = page.requestFullscreen || page.webkitRequestFullscreen;
+      const exitFS = document.exitFullscreen || document.webkitExitFullscreen;
+      const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      if (!fsEl) {
+        reqFS.call(page).catch(function(){});
       } else {
-        document.exitFullscreen();
+        exitFS.call(document);
       }
     }
     window.toggleFullscreen = toggleFullscreen;
