@@ -197,33 +197,26 @@
       if (isFs) {
         // Exit
         page.classList.remove('fake-fullscreen');
+        document.body.classList.remove('fullscreen-active');
         if (document.exitFullscreen) document.exitFullscreen().catch(function(){});
         else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
       } else {
-        // iOS Safari: only <video> elements support native fullscreen via webkitEnterFullscreen
-        if (videoEl.webkitEnterFullscreen && videoEl.src) {
-          videoEl.webkitEnterFullscreen();
-          return;
-        }
-        // Android/desktop: try native fullscreen on the page element
+        // Try native fullscreen first (Android/desktop)
         const reqFS = page.requestFullscreen || page.webkitRequestFullscreen;
         if (reqFS) {
           reqFS.call(page).catch(function() {
-            // Native failed — use CSS fake fullscreen
+            // Native failed (iOS) — use CSS fake fullscreen that incluye el banner
             page.classList.add('fake-fullscreen');
+            document.body.classList.add('fullscreen-active');
           });
         } else {
-          // Fallback CSS fake fullscreen (iOS sin video cargado, etc.)
+          // iOS Safari: CSS fake fullscreen con banner incluido
           page.classList.add('fake-fullscreen');
+          document.body.classList.add('fullscreen-active');
         }
       }
     }
     window.toggleFullscreen = toggleFullscreen;
-
-    // Sync fake-fullscreen toggle when iOS native video fullscreen ends
-    videoEl.addEventListener('webkitendfullscreen', function() {
-      document.querySelector('.player-page').classList.remove('fake-fullscreen');
-    });
   </script>
 </body>
 </html>

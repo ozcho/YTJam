@@ -336,7 +336,14 @@ input:focus { border-color: var(--accent); }
   left: 0;
   width: 100%;
   height: 100%;
+  height: -webkit-fill-available;
   z-index: 9999;
+}
+
+body.fullscreen-active {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
 }
 
 .player-wrapper {
