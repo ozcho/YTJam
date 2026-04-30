@@ -156,17 +156,15 @@ app.get('/api/search', async (req, res) => {
 
 // --- Pages ---
 
-app.get('/jam/:id/player', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'player.html'));
-});
+function sendJamPage(req, res, page) {
+  const jam = jams.get(req.params.id.toUpperCase());
+  if (!jam) return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+  res.sendFile(path.join(__dirname, 'public', page));
+}
 
-app.get('/jam/:id/admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-});
-
-app.get('/jam/:id', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'queue.html'));
-});
+app.get('/jam/:id/player', (req, res) => sendJamPage(req, res, 'player.html'));
+app.get('/jam/:id/admin',  (req, res) => sendJamPage(req, res, 'admin.html'));
+app.get('/jam/:id',        (req, res) => sendJamPage(req, res, 'queue.html'));
 
 // --- Socket.IO ---
 
