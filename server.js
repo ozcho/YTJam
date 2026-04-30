@@ -30,7 +30,7 @@ app.get('/api/config', (req, res) => {
 const jams = new Map();
 
 function createJam(password) {
-  const id = nanoid(8);
+  const id = nanoid(8).toUpperCase();
   const adminToken = nanoid(16);
   const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
   const jam = {
@@ -120,7 +120,7 @@ app.post('/api/jams', (req, res) => {
 });
 
 app.post('/api/jams/:id/auth', (req, res) => {
-  const jam = jams.get(req.params.id);
+  const jam = jams.get(req.params.id.toUpperCase());
   if (!jam) return res.status(404).json({ error: 'Jam no encontrada' });
   const password = (req.body && req.body.password) || '';
   const hash = crypto.createHash('sha256').update(password).digest('hex');
@@ -131,7 +131,7 @@ app.post('/api/jams/:id/auth', (req, res) => {
 });
 
 app.get('/api/jams/:id', (req, res) => {
-  const jam = jams.get(req.params.id);
+  const jam = jams.get(req.params.id.toUpperCase());
   if (!jam) return res.status(404).json({ error: 'Jam not found' });
   res.json(getPublicJamState(jam));
 });
@@ -174,7 +174,8 @@ io.on('connection', (socket) => {
   let currentJamId = null;
 
   socket.on('join-jam', ({ jamId, role, adminToken }) => {
-    const jam = jams.get(jamId);
+    const normalizedJamId = String(jamId || '').toUpperCase();
+    const jam = jams.get(normalizedJamId);
     if (!jam) {
       socket.emit('error-msg', 'Jam not found');
       return;
@@ -185,8 +186,8 @@ io.on('connection', (socket) => {
       return;
     }
 
-    currentJamId = jamId;
-    socket.join(jamId);
+    currentJamId = normalizedJamId;
+    socket.join(normalizedJamId);
     socket.role = role;
     socket.emit('jam-state', getPublicJamState(jam));
   });
