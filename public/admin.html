@@ -41,6 +41,7 @@
     <div class="tabs">
       <button class="tab active" data-tab="search" onclick="switchTab('search')">🔍 Buscar</button>
       <button class="tab" data-tab="url" onclick="switchTab('url')">🔗 Pegar URL</button>
+      <button class="tab" data-tab="playlist" onclick="switchTab('playlist')">📋 Playlist</button>
     </div>
 
     <div id="tab-search" style="margin-top:12px">
@@ -55,6 +56,21 @@
       <div class="url-input-group">
         <input type="text" id="url-input" placeholder="Pega un link de YouTube...">
         <button class="btn-primary" id="btn-add-url">Agregar</button>
+      </div>
+    </div>
+
+    <div id="tab-playlist" style="margin-top:12px;display:none">
+      <div class="url-input-group">
+        <input type="text" id="playlist-input" placeholder="Pega un link de playlist de YouTube...">
+        <button class="btn-primary" id="btn-add-playlist">Agregar Playlist</button>
+      </div>
+      <div id="playlist-results" style="margin-top:12px;display:none">
+        <div id="playlist-info" style="padding:12px;background:rgba(255,255,255,0.05);border-radius:4px;margin-bottom:12px">
+          <div id="playlist-name" style="font-weight:500;margin-bottom:4px"></div>
+          <div id="playlist-count" style="font-size:12px;color:var(--text-muted);margin-bottom:8px"></div>
+          <button class="btn-secondary" id="btn-add-all-playlist" onclick="addAllPlaylistVideos()" style="width:100%">➕ Agregar todos los videos</button>
+        </div>
+        <ul class="search-results" id="playlist-video-list"></ul>
       </div>
     </div>
 
@@ -162,6 +178,7 @@
       document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
       document.getElementById('tab-search').style.display = tab === 'search' ? '' : 'none';
       document.getElementById('tab-url').style.display = tab === 'url' ? '' : 'none';
+      document.getElementById('tab-playlist').style.display = tab === 'playlist' ? '' : 'none';
     }
 
     // Search
@@ -241,6 +258,94 @@
       if (e.key === 'Enter') document.getElementById('btn-add-url').click();
     });
 
+    // Add playlist
+    document.getElementById('btn-add-playlist').addEventListener('click', () => {
+      const url = document.getElementById('playlist-input').value.trim();
+      if (!url) {
+        showToast('Pega una URL de playlist');
+        return;
+      }
+      loadPlaylist(url);
+      document.getElementById('playlist-input').value = '';
+    });
+
+    document.getElementById('playlist-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('btn-add-playlist').click();
+    });
+
+    let currentPlaylistData = null;
+
+    async function loadPlaylist(url) {
+      const resultsDiv = document.getElementById('playlist-results');
+      resultsDiv.style.display = 'none';
+      document.getElementById('btn-add-playlist').disabled = true;
+      document.getElementById('btn-add-playlist').textContent = 'Cargando...';
+
+      try {
+        const res = await fetch(`/api/playlist?url=${encodeURIComponent(url)}`);
+        if (!res.ok) {
+          const error = await res.json();
+          showToast(error.error || 'Error al cargar la playlist');
+          return;
+        }
+
+        const data = await res.json();
+        currentPlaylistData = data;
+
+        document.getElementById('playlist-name').textContent = data.name;
+        document.getElementById('playlist-count').textContent = `${data.videos.length} videos (de ${data.videoCount} total)`;
+
+        const list = document.getElementById('playlist-video-list');
+        list.innerHTML = data.videos.map(v => `
+          <li class="search-result-item">
+            <img src="${escapeAttr(v.thumbnail)}" alt="">
+            <div class="queue-item-info">
+              <div class="title">${escapeHtml(v.title)}</div>
+              <div class="added-by">${escapeHtml(v.channel)} · ${escapeHtml(v.duration)} · ${v.cached ? '<span class="cached-badge">✓ descargado</span>' : ''}</div>
+            </div>
+          </li>
+        `).join('');
+
+        resultsDiv.style.display = 'block';
+        showToast(`Playlist cargada: ${data.videos.length} videos`);
+      } catch(e) {
+        console.error('Playlist load error:', e);
+        showToast('Error al cargar la playlist');
+      } finally {
+        document.getElementById('btn-add-playlist').disabled = false;
+        document.getElementById('btn-add-playlist').textContent = 'Agregar Playlist';
+      }
+    }
+
+    function addPlaylistVideo(videoId, title, thumbnail) {
+      socket.emit('add-video', { videoId, title, thumbnail, addedBy: 'Admin' });
+      showToast('¡Video agregado!');
+    }
+
+    function addAllPlaylistVideos() {
+      if (!currentPlaylistData || !currentPlaylistData.videos) {
+        showToast('Carga una playlist primero');
+        return;
+      }
+
+      const btn = document.getElementById('btn-add-all-playlist');
+      btn.disabled = true;
+      btn.textContent = 'Agregando...';
+
+      socket.emit('add-playlist', {
+        videos: currentPlaylistData.videos,
+        playlistName: currentPlaylistData.name
+      });
+
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = '➕ Agregar todos los videos';
+      }, 1000);
+    }
+
+    window.addPlaylistVideo = addPlaylistVideo;
+    window.addAllPlaylistVideos = addAllPlaylistVideos;
+
     function extractVideoId(url) {
       const patterns = [
         /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})/,
@@ -289,6 +394,10 @@
       showToast(msg);
     });
 
+    socket.on('playlist-added', ({ count, total }) => {
+      showToast(`✓ ${count} videos agregados`);
+    });
+
     function renderQueue(state) {
       const list = document.getElementById('queue-list');
 
@@ -308,6 +417,12 @@
           <div class="queue-item-info">
             <div class="title">${escapeHtml(item.title)}</div>
             <div class="added-by">${escapeHtml(item.addedBy)} · ${statusBadge(item.status)}</div>
+            ${item.status === 'downloading' && item.progress !== undefined ? `
+              <div style="margin-top:6px;background:rgba(255,255,255,0.1);border-radius:3px;height:4px;overflow:hidden">
+                <div style="background:var(--accent);height:100%;width:${item.progress}%;transition:width 0.2s" id="progress-${item.id}"></div>
+              </div>
+              <div style="font-size:11px;color:#f39c12;margin-top:3px">${item.progress}%</div>
+            ` : ''}
           </div>
           <div class="queue-item-actions">
             <button class="btn-icon" onclick="moveUp(${i})" title="Subir" ${i === 0 ? 'disabled' : ''}>↑</button>
@@ -322,6 +437,7 @@
     function statusBadge(status) {
       if (status === 'ready') return '<span style="color:var(--green)">✓ Listo</span>';
       if (status === 'downloading') return '<span style="color:#f39c12">⏳ Descargando...</span>';
+      if (status === 'pending') return '<span style="color:#95a5a6">⏱ Pendiente</span>';
       if (status === 'error') return '<span style="color:var(--accent)">✕ Error</span>';
       return '';
     }
