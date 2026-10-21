@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YTJam TV</title>
+  <style>
+    /* Sin dependencias de styles.css: Tizen solo necesita el reproductor */
+    html, body { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; }
+    body { font-family: Arial, Helvetica, sans-serif; color:#fff; }
+    #video-player { position:absolute; top:0; left:0; width:100%; height:100%; background:#000; }
+    .overlay { position:absolute; top:0; left:0; width:100%; height:100%; display:none; text-align:center; }
+    .overlay.visible { display:block; }
+    .overlay-inner { position:absolute; top:50%; left:0; width:100%; margin-top:-180px; }
+    .brand { font-size:48px; font-weight:bold; letter-spacing:2px; }
+    .brand em { color:#e74c3c; font-style:normal; }
+    .hint { font-size:28px; color:#aaa; margin-top:24px; }
+    .code { font-size:120px; font-weight:bold; letter-spacing:16px; margin-top:32px; color:#fff; }
+    .sub { font-size:22px; color:#777; margin-top:28px; }
+    #info-bar {
+      position:absolute; left:0; bottom:0; width:100%;
+      background:rgba(0,0,0,0.75); padding:24px 48px; box-sizing:border-box;
+      display:none;
+    }
+    #info-bar.visible { display:block; }
+    #info-title { font-size:34px; font-weight:bold; }
+    #info-meta { font-size:24px; color:#bbb; margin-top:8px; }
+    #info-next { font-size:24px; color:#888; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <video id="video-player" autoplay playsinline></video>
+
+  <div class="overlay visible" id="overlay">
+    <div class="overlay-inner">
+      <div class="brand">YT<em>Jam</em> TV</div>
+      <div class="hint" id="overlay-hint">Introduce este código en la pantalla de administración</div>
+      <div class="code" id="overlay-code">······</div>
+      <div class="sub" id="overlay-sub">Esperando conexión...</div>
+    </div>
+  </div>
+
+  <div id="info-bar">
+    <div id="info-title"></div>
+    <div id="info-meta"></div>
+    <div id="info-next"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    /* ES5 a proposito: navegadores de TV antiguos (Tizen) */
+    var socket = io();
+    var videoEl = document.getElementById('video-player');
+    var overlayEl = document.getElementById('overlay');
+    var overlayCodeEl = document.getElementById('overlay-code');
+    var overlayHintEl = document.getElementById('overlay-hint');
+    var overlaySubEl = document.getElementById('overlay-sub');
+    var infoBar = document.getElementById('info-bar');
+    var jamId = null;
+    var currentState = null;
+    var infoTimer = null;
+
+    function showOverlay(code, hint, sub) {
+      overlayCodeEl.textContent = code;
+      overlayHintEl.textContent = hint;
+      overlaySubEl.textContent = sub || '';
+      overlayEl.className = 'overlay visible';
+      infoBar.className = '';
+    }
+
+    function hideOverlay() {
+      overlayEl.className = 'overlay';
+    }
+
+    function escapeHtml(str) {
+      var div = document.createElement('div');
+      div.textContent = str == null ? '' : str;
+      return div.innerHTML;
+    }
+
+    function register() {
+      socket.emit('tv-register');
+    }
+
+    socket.on('connect', function () {
+      if (jamId) {
+        socket.emit('join-jam', { jamId: jamId, role: 'player' });
+      } else {
+        register();
+      }
+    });
+
+    socket.on('disconnect', function () {
+      if (!jamId) showOverlay('······', 'Reconectando...', '');
+    });
+
+    socket.on('tv-code', function (data) {
+      showOverlay(
+        data.code,
+        'Introduce este código en la pantalla de administración',
+        'El código caduca en ' + Math.round(data.expiresIn / 60000) + ' minutos'
+      );
+      // Renovar el código antes de que caduque
+      setTimeout(function () { if (!jamId) register(); }, data.expiresIn - 15000);
+    });
+
+    socket.on('tv-linked', function (data) {
+      jamId = data.jamId;
+      hideOverlay();
+      socket.emit('join-jam', { jamId: jamId, role: 'player' });
+    });
+
+    socket.on('error-msg', function (msg) {
+      jamId = null;
+      showOverlay('······', String(msg), 'Solicitando un código nuevo...');
+      register();
+    });
+
+    socket.on('jam-state', function (state) {
+      currentState = state;
+      updateInfo(state);
+      tryLoadCurrent(state);
+    });
+
+    socket.on('player-command', function (cmd) {
+      if (cmd.action === 'play') {
+        play();
+      } else if (cmd.action === 'pause') {
+        videoEl.pause();
+      } else if (cmd.action === 'load') {
+        if (currentState) tryLoadCurrent(currentState);
+      } else if (cmd.action === 'seek') {
+        videoEl.currentTime = cmd.time;
+      }
+    });
+
+    function play() {
+      var p = videoEl.play();
+      if (p && p['catch']) {
+        p['catch'](function () {
+          // Algunas TVs solo permiten autoplay sin sonido
+          videoEl.muted = true;
+          videoEl.play();
+        });
+      }
+    }
+
+    function tryLoadCurrent(state) {
+      if (!state.queue.length) {
+        videoEl.removeAttribute('src');
+        videoEl.load();
+        showInfo('Esperando videos...', '', '');
+        return;
+      }
+
+      var current = state.queue[state.currentIndex];
+      if (!current) return;
+
+      if (current.status === 'ready' && current.mediaUrl) {
+        if (videoEl.getAttribute('data-video-id') !== current.videoId) {
+          videoEl.setAttribute('data-video-id', current.videoId);
+          videoEl.src = current.mediaUrl;
+          videoEl.load();
+          play();
+        }
+      } else if (current.status === 'downloading') {
+        showInfo('Descargando: ' + current.title + '...', '', '');
+      } else if (current.status === 'error') {
+        showInfo('Error al descargar este video', '', '');
+      }
+    }
+
+    function updateInfo(state) {
+      if (!state.queue.length) return;
+      var current = state.queue[state.currentIndex];
+      if (!current) return;
+
+      var meta = 'Agregado por ' + current.addedBy + ' \u00b7 ' +
+        (state.currentIndex + 1) + '/' + state.queue.length;
+
+      var next = state.queue[state.currentIndex + 1];
+      var nextText = next
+        ? '\u23ed Siguiente: ' + next.title + (next.addedBy ? ' (' + next.addedBy + ')' : '')
+        : '';
+
+      showInfo(current.title, meta, nextText);
+    }
+
+    function showInfo(title, meta, next) {
+      document.getElementById('info-title').innerHTML = escapeHtml(title);
+      document.getElementById('info-meta').innerHTML = escapeHtml(meta);
+      document.getElementById('info-next').innerHTML = escapeHtml(next);
+      infoBar.className = 'visible';
+      if (infoTimer) clearTimeout(infoTimer);
+      infoTimer = setTimeout(function () { infoBar.className = ''; }, 8000);
+    }
+
+    videoEl.addEventListener('ended', function () {
+      socket.emit('video-ended');
+    });
+
+    videoEl.addEventListener('play', function () {
+      socket.emit('player-status', { isPlaying: true });
+    });
+
+    videoEl.addEventListener('pause', function () {
+      socket.emit('player-status', { isPlaying: false });
+    });
+
+    // Mando: OK/Enter muestra la info, y quita el silencio si la TV forzó autoplay mudo
+    document.addEventListener('keydown', function (e) {
+      if (e.keyCode === 13) {
+        if (videoEl.muted) videoEl.muted = false;
+        if (currentState) updateInfo(currentState);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -29,6 +29,18 @@ app.get('/api/config', (req, res) => {
 // In-memory store for jam sessions
 const jams = new Map();
 
+// Pantallas (TV) esperando emparejamiento: codigo -> { socketId, createdAt }
+const tvCodes = new Map();
+const TV_CODE_TTL = 10 * 60 * 1000;
+
+function generateTvCode() {
+  let code;
+  do {
+    code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+  } while (tvCodes.has(code));
+  return code;
+}
+
 function createJam(password) {
   const id = nanoid(8).toUpperCase();
   const adminToken = nanoid(16);
@@ -327,10 +339,57 @@ app.get('/jam/:id/player', (req, res) => sendJamPage(req, res, 'player.html'));
 app.get('/jam/:id/admin',  (req, res) => sendJamPage(req, res, 'admin.html'));
 app.get('/jam/:id',        (req, res) => sendJamPage(req, res, 'queue.html'));
 
+// Reproductor lite para TVs (Tizen): se empareja con un codigo numerico
+app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'tv.html')));
+
 // --- Socket.IO ---
 
 io.on('connection', (socket) => {
   let currentJamId = null;
+  let tvCode = null;
+  let linkAttempts = 0;
+
+  // --- Emparejamiento de TVs ---
+
+  socket.on('tv-register', () => {
+    if (tvCode) tvCodes.delete(tvCode);
+    tvCode = generateTvCode();
+    tvCodes.set(tvCode, { socketId: socket.id, createdAt: Date.now() });
+    socket.emit('tv-code', { code: tvCode, expiresIn: TV_CODE_TTL });
+  });
+
+  socket.on('link-tv', ({ code }) => {
+    const jam = jams.get(currentJamId);
+    if (socket.role !== 'admin' || !jam) return;
+    if (++linkAttempts > 10) {
+      socket.emit('tv-link-result', { ok: false, error: 'Demasiados intentos' });
+      return;
+    }
+
+    const normalized = String(code || '').replace(/\D/g, '');
+    const entry = tvCodes.get(normalized);
+    if (!entry || Date.now() - entry.createdAt > TV_CODE_TTL) {
+      tvCodes.delete(normalized);
+      socket.emit('tv-link-result', { ok: false, error: 'Código inválido o caducado' });
+      return;
+    }
+
+    const tvSocket = io.sockets.sockets.get(entry.socketId);
+    if (!tvSocket) {
+      tvCodes.delete(normalized);
+      socket.emit('tv-link-result', { ok: false, error: 'La TV ya no está conectada' });
+      return;
+    }
+
+    tvCodes.delete(normalized);
+    // La TV se une por su cuenta con join-jam para inicializar su propio estado
+    tvSocket.emit('tv-linked', { jamId: jam.id });
+    socket.emit('tv-link-result', { ok: true });
+  });
+
+  socket.on('disconnect', () => {
+    if (tvCode) tvCodes.delete(tvCode);
+  });
 
   socket.on('join-jam', ({ jamId, role, adminToken }) => {
     const normalizedJamId = String(jamId || '').toUpperCase();
@@ -576,6 +635,11 @@ setInterval(() => {
   for (const [id, jam] of jams) {
     if (now - jam.createdAt > MAX_AGE) {
       jams.delete(id);
+    }
+  }
+  for (const [code, entry] of tvCodes) {
+    if (now - entry.createdAt > TV_CODE_TTL) {
+      tvCodes.delete(code);
     }
   }
 }, 60 * 60 * 1000);

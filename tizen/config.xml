@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://ozcho.github.io/ytjam-tv" version="1.0.0" viewmodes="maximized">
+    <tizen:application id="YTJamTV000.YTJamTV" package="YTJamTV000" required_version="2.4"/>
+    <content src="index.html"/>
+    <icon src="icon.png"/>
+    <name>YTJam TV</name>
+    <tizen:profile name="tv-samsung"/>
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <access origin="https://ytjam.ozcho.com" subdomains="false"/>
+    <tizen:allow-navigation>ytjam.ozcho.com</tizen:allow-navigation>
+    <tizen:content-security-policy>default-src 'self' https://ytjam.ozcho.com 'unsafe-inline'; media-src https://ytjam.ozcho.com; img-src 'self' https://ytjam.ozcho.com data:; connect-src https://ytjam.ozcho.com wss://ytjam.ozcho.com</tizen:content-security-policy>
+    <tizen:setting screen-orientation="landscape" background-support="disable" encryption="disable" hwkey-event="enable"/>
+</widget>
