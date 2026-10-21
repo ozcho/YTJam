@@ -26,6 +26,7 @@
     #info-title { font-size:34px; font-weight:bold; }
     #info-meta { font-size:24px; color:#bbb; margin-top:8px; }
     #info-next { font-size:24px; color:#888; margin-top:8px; }
+    #info-next:empty { display:none; }
   </style>
 </head>
 <body>
@@ -58,7 +59,6 @@
     var infoBar = document.getElementById('info-bar');
     var jamId = null;
     var currentState = null;
-    var infoTimer = null;
 
     function showOverlay(code, hint, sub) {
       overlayCodeEl.textContent = code;
@@ -191,8 +191,6 @@
       document.getElementById('info-meta').innerHTML = escapeHtml(meta);
       document.getElementById('info-next').innerHTML = escapeHtml(next);
       infoBar.className = 'visible';
-      if (infoTimer) clearTimeout(infoTimer);
-      infoTimer = setTimeout(function () { infoBar.className = ''; }, 8000);
     }
 
     videoEl.addEventListener('ended', function () {
@@ -207,12 +205,9 @@
       socket.emit('player-status', { isPlaying: false });
     });
 
-    // Mando: OK/Enter muestra la info, y quita el silencio si la TV forzó autoplay mudo
+    // Mando: OK/Enter quita el silencio si la TV forzó autoplay mudo
     document.addEventListener('keydown', function (e) {
-      if (e.keyCode === 13) {
-        if (videoEl.muted) videoEl.muted = false;
-        if (currentState) updateInfo(currentState);
-      }
+      if (e.keyCode === 13 && videoEl.muted) videoEl.muted = false;
     });
   </script>
 </body>
