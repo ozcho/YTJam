@@ -172,7 +172,8 @@
       const nextIndex = state.currentIndex + 1;
       if (nextIndex < state.queue.length) {
         const next = state.queue[nextIndex];
-        nextEl.innerHTML = '\u23ed\ufe0f Siguiente: <strong>' + escapeHtml(next.title) + '</strong>';
+        nextEl.innerHTML = '\u23ed\ufe0f Siguiente: <strong>' + escapeHtml(next.title) + '</strong>'
+          + (next.addedBy ? ' <span>(' + escapeHtml(next.addedBy) + ')</span>' : '');
         nextEl.style.display = 'block';
       } else {
         nextEl.style.display = 'none';

@@ -6,6 +6,8 @@ services:
     environment:
       - PORT=3000
       - BASE_URL=http://localhost:3000
+      # Seconds between yt-dlp auto-updates (0 disables)
+      - YTDLP_UPDATE_INTERVAL=86400
     volumes:
       - ytjam-media:/app/media
     restart: unless-stopped

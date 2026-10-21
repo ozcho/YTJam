@@ -104,9 +104,11 @@ function downloadVideo(videoId, queueItem, jamId) {
   queueItem.progress = 0;
 
   const args = [
-    '-f', 'bestvideo[vcodec^=avc][height<=720]+bestaudio[acodec^=mp4a]/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best',
+    // Solo formatos H.264/AAC: el merge a mp4 es copia de streams, sin recodificar
+    '-f', 'bestvideo[vcodec^=avc1][height<=720]+bestaudio[acodec^=mp4a]/best[vcodec^=avc1][height<=720]/best[ext=mp4][height<=720]/best',
+    '-S', 'res:720,vcodec:h264,acodec:aac,ext:mp4:m4a',
     '--merge-output-format', 'mp4',
-    '--postprocessor-args', 'ffmpeg:-vcodec libx264 -acodec aac',
+    '--js-runtimes', 'node',
     '-o', outputPath,
     '--no-playlist',
     '--no-warnings',
