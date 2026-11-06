@@ -4,7 +4,6 @@ const { Server } = require('socket.io');
 const { nanoid } = require('nanoid');
 const path = require('path');
 const crypto = require('crypto');
-const YouTube = require('youtube-sr').default;
 const { execFile } = require('child_process');
 const fs = require('fs');
 
@@ -233,20 +232,73 @@ app.get('/api/jams/:id', (req, res) => {
   res.json(getPublicJamState(jam));
 });
 
+// --- Metadatos de YouTube via yt-dlp ---
+// Antes se usaba youtube-sr, pero su parser del HTML de YouTube quedo obsoleto.
+// yt-dlp se auto-actualiza a diario desde el entrypoint, asi que aguanta los
+// cambios de YouTube sin tocar la imagen.
+const YTDLP_METADATA_TIMEOUT = 45000;
+
+function runYtdlp(args) {
+  return new Promise((resolve, reject) => {
+    execFile('yt-dlp', args, { timeout: YTDLP_METADATA_TIMEOUT, maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) {
+        const detail = String(stderr || err.message).trim().split('\n').filter(Boolean).pop();
+        return reject(new Error(detail || 'yt-dlp failed'));
+      }
+      resolve(stdout);
+    });
+  });
+}
+
+async function runYtdlpJsonLines(args) {
+  const stdout = await runYtdlp(args);
+  return stdout
+    .split('\n')
+    .filter(line => line.trim())
+    .map(line => { try { return JSON.parse(line); } catch { return null; } })
+    .filter(Boolean);
+}
+
+function formatDuration(seconds) {
+  const total = Math.floor(Number(seconds) || 0);
+  if (total <= 0) return '';
+  const pad = n => String(n).padStart(2, '0');
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+// Los videos privados/borrados siguen apareciendo en las playlists sin datos utiles
+function isPlayableEntry(entry) {
+  return Boolean(entry && entry.id && entry.title) &&
+    !['[Private video]', '[Deleted video]', '[Unavailable video]'].includes(entry.title);
+}
+
+function mapYtdlpEntry(entry) {
+  return {
+    videoId: entry.id,
+    title: entry.title,
+    thumbnail: 'https://img.youtube.com/vi/' + entry.id + '/mqdefault.jpg',
+    duration: formatDuration(entry.duration),
+    channel: entry.channel || entry.uploader || '',
+    cached: fs.existsSync(path.join(mediaDir, `${entry.id}.mp4`)),
+  };
+}
+
 app.get('/api/search', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const q = String(req.query.q || '').trim();
   if (!q) return res.json([]);
   try {
-    const results = await YouTube.search(q, { limit: 8, type: 'video' });
-    res.json(results.map(v => ({
-      videoId: v.id,
-      title: v.title,
-      thumbnail: v.thumbnail?.url || ('https://img.youtube.com/vi/' + v.id + '/mqdefault.jpg'),
-      duration: v.durationFormatted || '',
-      channel: v.channel?.name || '',
-      cached: fs.existsSync(path.join(mediaDir, `${v.id}.mp4`)),
-    })));
+    const entries = await runYtdlpJsonLines([
+      '--flat-playlist',
+      '--dump-json',
+      '--no-warnings',
+      '--ignore-config',
+      `ytsearch8:${q}`,
+    ]);
+    res.json(entries.filter(isPlayableEntry).map(mapYtdlpEntry));
   } catch (err) {
     console.error('Search error:', err.message);
     res.status(500).json({ error: 'Search failed' });
@@ -283,46 +335,35 @@ app.get('/api/playlist', async (req, res) => {
     }
     
     console.log('[Playlist] Loading playlist ID:', playlistId);
-    const playlist = await YouTube.getPlaylist(`https://www.youtube.com/playlist?list=${playlistId}`);
-    
-    if (!playlist) return res.status(400).json({ error: 'Playlist no encontrada' });
-    
-    // Get videos - playlist.fetch() returns the playlist object, not just videos
-    let videos = [];
-    if (Array.isArray(playlist.videos)) {
-      videos = playlist.videos;
-    } else if (Array.isArray(playlist)) {
-      videos = playlist;
-    } else if (playlist.all && Array.isArray(playlist.all())) {
-      videos = await playlist.all();
-    } else if (typeof playlist.fetch === 'function') {
-      const fetched = await playlist.fetch();
-      videos = Array.isArray(fetched) ? fetched : (Array.isArray(fetched.videos) ? fetched.videos : []);
+    const PLAYLIST_LIMIT = 50;
+    const stdout = await runYtdlp([
+      '--flat-playlist',
+      '--dump-single-json',
+      '--no-warnings',
+      '--ignore-config',
+      '--playlist-end', String(PLAYLIST_LIMIT),
+      `https://www.youtube.com/playlist?list=${playlistId}`,
+    ]);
+
+    let playlist;
+    try {
+      playlist = JSON.parse(stdout);
+    } catch {
+      return res.status(400).json({ error: 'Playlist no encontrada' });
     }
-    
-    if (!Array.isArray(videos) || videos.length === 0) {
+
+    const videos = (Array.isArray(playlist.entries) ? playlist.entries : []).filter(isPlayableEntry);
+    if (videos.length === 0) {
       return res.status(400).json({ error: 'No se encontraron videos en la playlist' });
     }
-    
-    const limit = Math.min(videos.length, 50); // Limitar a 50 videos
-    
-    const results = videos.slice(0, limit).map(v => ({
-      videoId: v.id,
-      title: v.title,
-      thumbnail: v.thumbnail?.url || ('https://img.youtube.com/vi/' + v.id + '/mqdefault.jpg'),
-      duration: v.durationFormatted || '',
-      channel: v.channel?.name || '',
-      cached: fs.existsSync(path.join(mediaDir, `${v.id}.mp4`)),
-    }));
-    
+
     res.json({
-      name: playlist.name,
-      videoCount: videos.length,
-      videos: results,
+      name: playlist.title || 'Playlist',
+      videoCount: playlist.playlist_count || videos.length,
+      videos: videos.map(mapYtdlpEntry),
     });
   } catch (err) {
     console.error('Playlist error:', err.message);
-    console.error('Stack:', err.stack);
     res.status(400).json({ error: 'No se pudo obtener la playlist: ' + err.message });
   }
 });
